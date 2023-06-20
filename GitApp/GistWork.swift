@@ -3,28 +3,35 @@
 
 import Foundation
 
-struct Gist: Codable {
-    var description: String?
-    var owner: Owner?
+protocol APIProtocol {
+    func getGists(session: URLSession, endpoint: Endpoint, completion: @escaping (Result<Gist, GitAppError>) -> Void)
 }
 
-struct Owner: Codable {
-    var login: String?
-}
-
-class API {
-
-    func getGists(completion: @escaping (Gist?) -> Void) {
-        let url: URL = URL(string: "https://api.github.com/gists/a88b2a942084c0e66b34d0db5f7cf2e5")!
+final class API: APIProtocol {
+    
+    func getGists(session: URLSession, endpoint: Endpoint, completion: @escaping (Result<Gist, GitAppError>) -> Void) {
+        guard
+            let _baseURL = endpoint.baseUrl,
+            let url = URL(string: "\(_baseURL)\(endpoint.path)")
+        else {
+            completion(.failure(.urlError))
+            return
+        }
         
         var request = URLRequest(url: url)
-        request.httpMethod = "GET"
+        request.httpMethod = endpoint.method.rawValue
         
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
-            
-            let response: Gist = try! JSONDecoder().decode(Gist.self, from: data!)
-            
-            completion(response)
+        let task = session.dataTask(with: request) { data, response, error in
+            if let data {
+                do {
+                    let response: Gist = try JSONDecoder().decode(Gist.self, from: data)
+                    completion(.success(response))
+                } catch {
+                    completion(.failure(.parseError))
+                }
+            } else {
+                completion(.failure(.requestError))
+            }
         }
         
         task.resume()
